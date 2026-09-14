@@ -1,0 +1,6 @@
+.venv/
+.llm_sdk
+.python-version
+prokect.toml
+uv.lock
+__pycache__/
