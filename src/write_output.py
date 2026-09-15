@@ -10,17 +10,12 @@ class WritingOutputError(Exception):
     pass
 
 
-def write_output(output: dict[str, Any], path: str) -> None:
+def write_output(output_dicts: dict[str, Any], path: str) -> None:
     """Write the result in the output file"""
     try:
         with open(path, 'w', encoding='utf-8') as output_file:
-            result_dict = {
-                "prompt": "aqui va el prompt",
-                "name": "fn_name",
-                "parameters": {"a": "p_a", "b": "p_b"}
-                }
-            result_example: FunctionCallResult = FunctionCallResult(**result_dict)
-            output_file.write(result_example.model_dump_json())
+            output_json = json.dumps(output_dicts, indent=2)
+            output_file.write(output_json)
     except ValidationError:
         raise WritingOutputError("error de ejemplo")
     except (FileNotFoundError, IsADirectoryError):

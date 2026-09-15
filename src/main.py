@@ -4,9 +4,11 @@ import argparse
 from file_loader import ParsingFileError, load_fn_definitions, load_prompts
 from write_output import write_output, WritingOutputError
 from basemodels import FunctionDefinition, PromptItem, FunctionCallResult
-from constrained_decoding import decode
+from constrained_decoding import decode_output, DecodingError
 from typing import Any
 from pydantic import ValidationError
+import json
+from llm_sdk import Small_LLM_Model
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,30 +42,40 @@ def call_me_maybe() -> None:
     try:
         functions: list[FunctionDefinition] = load_fn_definitions(fn_def_path)
         prompts: list[PromptItem] = load_prompts(prompts_path)
-        param_types_list: list[str] = []
-        for function in functions:
-            for param in function.parameters:
-                param_types_list.append(function.parameters[param].type)
-        param_set: set[str] = set(param_types_list)
-        print(param_set)
-        output = list[dict[str, Any]]
+        output: list[FunctionCallResult] = []
+        model = Small_LLM_Model()
+        vocab_path: str = model.get_path_to_vocab_file()
+        with open(vocab_path) as f:
+            vocab_file = json.load(f)
+            vocab: dict[int, str] = {
+                v: k for k, v in vocab_file.items()
+                }
         for prompt in prompts:
-            object_dict: dict[str, Any] = decode(prompt.prompt, functions)
-        try:
+            print("********************")
+            print(f"Processing prompt:\n{prompt}")
+            object_dict: dict[str, Any] = decode_output(
+                prompt.prompt, functions, model, vocab
+                )
             object: FunctionCallResult = FunctionCallResult(**object_dict)
-        except ValidationError as e:
-            print(f"Error validating functioncall {e}")
-            return
-        output.append(object)
-        write_output(output, output_path)
+            output.append(object)
+
+        output_dicts = [result.model_dump() for result in output]
+        write_output(output_dicts, output_path)
+    except (
+                FileNotFoundError, PermissionError
+            ):
+        raise DecodingError("Model vocab file couldn't be found")
+    except ValidationError as e:
+        raise ValidationError(f"Error validating an object {e}")
     except ParsingFileError as e:
-        print(f"An error ocurred while parsing json files: {e}",
+        raise ParsingFileError(f"An error ocurred while parsing json files: {e}",
               file=sys.stderr)
     except WritingOutputError as e:
-        print(f"An error ocurred while writing the output file: {e}",
+        raise WritingOutputError(f"An error ocurred while writing the output file: {e}",
               file=sys.stderr)
-        
-
+    except KeyboardInterrupt:
+        raise KeyboardInterrupt("User interrupted the program")
+    # excep exceptions
 
 
 if __name__ == "__main__":

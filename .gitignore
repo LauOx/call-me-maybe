@@ -1,6 +1,7 @@
 .venv/
-.llm_sdk
+llm_sdk/
 .python-version
-prokect.toml
+pyproject.toml
 uv.lock
 __pycache__/
+.DS_Store
