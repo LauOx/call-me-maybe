@@ -1,5 +1,6 @@
 from llm_sdk import Small_LLM_Model
 from basemodels import ParameterSpec, FunctionDefinition
+from torch import Tensor
 from typing import Any
 import aux
 
@@ -14,16 +15,29 @@ def decode_fn_name(
         vocab: dict[int, str],
         context: str,
         allowed: list[str]) -> str:
-    """Find the next token to form the fn_name"""
-    encoded = model.encode(context)
-    input_ids = encoded[0].tolist()
+    """
+    Decode function name from the model
+    Args:
+        model: Small_LLM_Model: the model to use for decoding
+        vocab: dict[int, str]: the vocabulary to use for decoding
+        context: str: the context to use for decoding
+        allowed: list[str]: the list of allowed function names
+    Returns:
+        str: the decoded function name
+    Raises:
+        DecodingError: if no matches found for function name
+    """
+    encoded: Tensor = model.encode(context)
+    input_ids: list[int] = encoded[0].tolist()
     candidate: str = ""
     fn_name: str = ""
     param_value: str = ""
-    status = aux.check_candidate_logits(candidate, allowed)
+    status: aux.CandidateStatus = aux.check_candidate_logits(
+        candidate, allowed
+        )
 
     while status != aux.CandidateStatus.VALID_COMPLETE:
-        logits = model.get_logits_from_input_ids(input_ids)
+        logits: list[float] = model.get_logits_from_input_ids(input_ids)
 
         # invalid tokens to logit -inf
         for token_id in range(len(logits)):
@@ -43,9 +57,9 @@ def decode_fn_name(
             raise DecodingError("No matches found for function name")
 
         # Add new token to answer
-        next_token_id = logits.index(max(logits))
+        next_token_id: int = logits.index(max(logits))
         input_ids.append(next_token_id)
-        decoded_next_token = vocab[next_token_id]
+        decoded_next_token: str = vocab[next_token_id]
         fn_name += decoded_next_token
         status = aux.check_candidate_logits(fn_name, allowed)
 
@@ -57,15 +71,26 @@ def decode_param_number(
         vocab: dict[int, str],
         context: str,
         type: str) -> str:
-    """Decode param if type is a kind of number"""
+    """
+    Decode function parameter if type is a kind of number
+    Args:
+        model: Small_LLM_Model: the model to use for decoding
+        vocab: dict[int, str]: the vocabulary to use for decoding
+        context: str: the context to use for decoding
+        type: str: the type of the parameter to decode
+    Returns:
+        str: the decoded parameter value
+    Raises:
+        DecodingError: if no matches found for function parameter
+    """
     context += ' "'
-    encoded = model.encode(context)
-    input_ids = encoded[0].tolist()
+    encoded: Tensor = model.encode(context)
+    input_ids: list[int] = encoded[0].tolist()
     candidate: str = ""
     param_value: str = ""
-    status = True
+    status: bool = True
     while status and len(param_value) < 10:
-        logits = model.get_logits_from_input_ids(input_ids)
+        logits: list[float] = model.get_logits_from_input_ids(input_ids)
 
         # invalid tokens to logit -inf
         for token_id in range(len(logits)):
@@ -73,11 +98,8 @@ def decode_param_number(
             if token_text is None:
                 logits[token_id] = float("-inf")
                 continue
-            # if type == aux.ParamType.INTEGER.name:
-            #     if not aux.is_valid_number(token_text):
-            #         logits[token_id] = float("-inf")
             candidate = param_value + token_text
-            cleaned_candidate = candidate.rstrip('Ġ').rstrip('"')
+            cleaned_candidate: str = candidate.rstrip('Ġ').rstrip('"')
             if param_value != "":
                 if not aux.is_valid_number(cleaned_candidate):
                     logits[token_id] = float("-inf")
@@ -96,9 +118,9 @@ def decode_param_number(
             reverse=True
         )[:5]:
             print(repr(vocab.get(token_id)), logits[token_id])
-        next_token_id = logits.index(max(logits))
+        next_token_id: int = logits.index(max(logits))
         input_ids.append(next_token_id)
-        decoded_next_token = vocab[next_token_id]
+        decoded_next_token: str = vocab[next_token_id]
         candidate = param_value + decoded_next_token
 
         # Check if result is still a valid number
@@ -114,14 +136,24 @@ def decode_param_string(
         vocab: dict[int, str],
         context: str,
         ) -> str:
-    """Decode param if type is string"""
+    """
+    Decode parameter if is a string
+    Args:
+        model: Small_LLM_Model: the model to use for decoding
+        vocab: dict[int, str]: the vocabulary to use for decoding
+        context: str: the context to use for decoding
+    Returns:
+        str: the decoded parameter value
+    Raises:
+        DecodingError: if no matches found for function parameter
+    """
     context += '"'
-    encoded = model.encode(context)
-    input_ids = encoded[0].tolist()
+    encoded: Tensor = model.encode(context)
+    input_ids: list[int] = encoded[0].tolist()
     param_value: str = ""
     status = True
     while status:
-        logits = model.get_logits_from_input_ids(input_ids)
+        logits: list[float] = model.get_logits_from_input_ids(input_ids)
 
         # invalid tokens to logit -inf
         for token_id in range(len(logits)):
@@ -141,11 +173,9 @@ def decode_param_string(
                     "No matches found for function parameter"
                     )
 
-        next_token_id = logits.index(max(logits))
+        next_token_id: int = logits.index(max(logits))
         input_ids.append(next_token_id)
-        decoded_next_token = vocab[next_token_id]
-        if decoded_next_token == '\\\\':
-            decoded_next_token = '\\'
+        decoded_next_token: str = vocab[next_token_id]
         print(repr(decoded_next_token))
 
         # Find if next token starts with stop char
@@ -172,17 +202,27 @@ def decode_param_bool(
         vocab: dict[int, str],
         context: str,
         ) -> str:
-    """Decode parameter if is a boolean"""
+    """
+    Decode parameter if is a boolean
+    Args:
+        model: Small_LLM_Model: the model to use for decoding
+        vocab: dict[int, str]: the vocabulary to use for decoding
+        context: str: the context to use for decoding
+    Returns:
+        str: the decoded parameter value
+    Raises:
+        DecodingError: if no matches found for function parameter
+    """
     context += (
         "Based on the request, should 'strict' be true or false? Answer: "
     )
-    encoded = model.encode(context)
-    input_ids = encoded[0].tolist()
+    encoded: Tensor = model.encode(context)
+    input_ids: list[int] = encoded[0].tolist()
     candidate: str = ""
     param_value: str = ""
     status = True
     while status:
-        logits = model.get_logits_from_input_ids(input_ids)
+        logits: list[float] = model.get_logits_from_input_ids(input_ids)
         for token_id in range(len(logits)):
             token_text = vocab.get(token_id)
             if token_text is None:
@@ -197,9 +237,9 @@ def decode_param_bool(
             raise DecodingError(
                 "No matches found for function parameter"
                 )
-        next_token_id = logits.index(max(logits))
+        next_token_id: int = logits.index(max(logits))
         input_ids.append(next_token_id)
-        decoded_next_token = vocab[next_token_id]
+        decoded_next_token: str = vocab[next_token_id]
         candidate = param_value + decoded_next_token
         status = not (candidate == 'true' or candidate == 'false')
         param_value += decoded_next_token
@@ -211,7 +251,17 @@ def decode_parameter(
         vocab: dict[int, str],
         context: str,
         type: str) -> str:
-    """decode each parameter needed to run function"""
+    """
+    Decode a parameter based on its type
+    Args:
+        model: Small_LLM_Model: the model to use for decoding
+        vocab: dict[int, str]: the vocabulary to use for decoding
+        context: str: the context to use for decoding
+        type: str: the type of the parameter
+    Returns:
+        str: the decoded parameter value
+    """
+    param_value: str = ""
     if (
         type == aux.ParamType.NUMBER.name or
         type == aux.ParamType.FLOAT.name or
@@ -237,14 +287,23 @@ def decode_output(
         functions: list[FunctionDefinition],
         model: Small_LLM_Model,
         vocab: dict[int, str],) -> dict[str, Any]:
-    """Start the decode process"""
-    object_return: dict[str: Any] = {}
+    """
+    Decode the output of the model into a dictionary of function calls
+    Args:
+        prompt: str: the prompt to use for decoding
+        functions: list[FunctionDefinition]: the list of function definitions
+        model: Small_LLM_Model: the model to use for decoding
+        vocab: dict[int, str]: the vocabulary to use for decoding
+    Returns:
+        dict[str, Any]: the decoded function calls
+    """
+    object_return: dict[str, Any] = {}
     fn_name: str = ""
 
     # Find function name
     allowed_fn_names: list[str] = []
-    for function in functions:
-        allowed_fn_names.append(function.name)
+    for fn in functions:
+        allowed_fn_names.append(fn.name)
     if len(allowed_fn_names) == 0:
         raise DecodingError(
             "No function names found in the function definitions input file"
@@ -256,8 +315,8 @@ def decode_output(
 
     # Find function parameters
     function: FunctionDefinition = next(
-        function for function in functions
-        if function.name == fn_name
+        fn for fn in functions
+        if fn.name == fn_name
     )
     funct_param: dict[str, ParameterSpec] = function.parameters
     result_parameters: dict[str, Any] = {}
@@ -268,7 +327,7 @@ def decode_output(
     for param in funct_param:
         type = aux.ParamType(funct_param[param].type).name
         param_initial_context += (
-            f'"{param}":' # UN ESPACIO AQUI LO CAMBIA TODO NO ENTIENDO si lo quito sale bien regex * y \\d pero mal Shrek
+            f'"{param}":'
         )
         print(param_initial_context)
         param_value = decode_parameter(
@@ -298,7 +357,7 @@ def decode_output(
                 )
             print(f"parametro antes de entrar al diccionario: {final_param}")
             result_parameters[param] = final_param
-        # Add param found to context for next param
+        # Add param found for context to find next param
         param_initial_context += param_value + ', '
     # Save final dict result
     object_return = {

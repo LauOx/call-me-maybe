@@ -1,13 +1,11 @@
-import sys
 import argparse
+import json
 from file_loader import ParsingFileError, load_fn_definitions, load_prompts
 from write_output import write_output, WritingOutputError
 from basemodels import FunctionDefinition, PromptItem, FunctionCallResult
 from constrained_decoding import decode_output, DecodingError
 from typing import Any
 from pydantic import ValidationError
-import json
-from llm_sdk import Small_LLM_Model
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -50,7 +48,16 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def call_me_maybe() -> None:
-    """Run function calling program and raises erros"""
+    """
+    Main function to process prompts and generate function call results.
+    """
+    try:
+        from llm_sdk import Small_LLM_Model
+    except ImportError:
+        raise ImportError(
+            "llm_sdk module not found. "
+            "Please ensure it is installed and accessible."
+        )
     args = parse_arguments()
     fn_def_path: str = args.functions_definition
     prompts_path: str = args.input
@@ -75,7 +82,9 @@ def call_me_maybe() -> None:
             object: FunctionCallResult = FunctionCallResult(**object_dict)
             output.append(object)
 
-        output_dicts = [result.model_dump() for result in output]
+        output_dicts: Any = [
+            result.model_dump() for result in output
+            ]
         write_output(output_dicts, output_path)
     except (
                 FileNotFoundError, PermissionError
@@ -85,16 +94,12 @@ def call_me_maybe() -> None:
         raise ValidationError(f"Error validating an object {e}")
     except ParsingFileError as e:
         raise ParsingFileError(
-            f"An error ocurred while parsing json files: {e}",
-              file=sys.stderr)
+            f"An error ocurred while parsing json files: {e}")
     except WritingOutputError as e:
         raise WritingOutputError(
-            f"An error ocurred while writing the output file: {e}",
-              file=sys.stderr)
-    except KeyboardInterrupt:
-        raise KeyboardInterrupt("User interrupted the program")
+            f"An error ocurred while writing the output file: {e}")
     # excep exceptions
 
 
-if __name__ == "__main__":
-    call_me_maybe()
+# if __name__ == "__main__":
+#     call_me_maybe()

@@ -8,7 +8,16 @@ class WritingOutputError(Exception):
 
 
 def write_output(output_dicts: dict[str, Any], path: str) -> None:
-    """Write the result in the output file"""
+    """
+    Write the output dictionaries to a JSON file.
+
+    Args:
+        output_dicts: A list of dictionaries representing the output.
+        path: The path to the output file.
+
+    Raises:
+        WritingOutputError: If there is an error writing the output file.
+    """
     try:
         with open(path, 'w', encoding='utf-8') as output_file:
             output_json = json.dumps(output_dicts, indent=2)

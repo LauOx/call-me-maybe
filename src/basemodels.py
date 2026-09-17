@@ -18,10 +18,10 @@ class FunctionDefinition(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def check_extra_fields(cls, data):
+    def check_extra_fields(cls, data: Any) -> Any:
         valid_fields = cls.model_fields.keys()
 
-        extra_fields = set(data) - set(valid_fields)
+        extra_fields: set[str] = set(data) - set(valid_fields)
 
         for field in extra_fields:
             print(f"The field: {field} has been ignored")
@@ -30,15 +30,16 @@ class FunctionDefinition(BaseModel):
 
 
 class PromptItem(BaseModel):
+    """Check and validate the test prompts"""
     model_config = ConfigDict(extra='forbid')
     prompt: str = Field(..., min_length=1)
 
     @model_validator(mode="before")
     @classmethod
-    def check_extra_fields(cls, data):
+    def check_extra_fields(cls, data: Any) -> Any:
         valid_fields = cls.model_fields.keys()
 
-        extra_fields = set(data) - set(valid_fields)
+        extra_fields: set[str] = set(data) - set(valid_fields)
 
         for field in extra_fields:
             print(f"The field: {field} has been ignored")

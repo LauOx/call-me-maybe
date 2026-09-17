@@ -10,10 +10,14 @@ class ParsingFileError(Exception):
 
 
 def load_fn_definitions(path: str) -> list[FunctionDefinition]:
-    """Load the function_definitions.json file
+    """
+    Load the function definitions from the functions_definition.json
     Args:
-    path: str: the path to the file
+        path: str: the path to the file
+    Returns:
+        list[FunctionDefinition]: the list of function definitions
     Raises:
+        ParsingFileError: if the file is not found or contains invalid JSON
     """
     function_list: list[FunctionDefinition] = []
     try:
@@ -39,7 +43,15 @@ def load_fn_definitions(path: str) -> list[FunctionDefinition]:
 
 
 def load_prompts(path: str) -> list[PromptItem]:
-    """Load the prompts from de function_calling_test.json"""
+    """
+    Load the prompts from the function_calling_test.json file
+    Args:
+        path: str: the path to the file
+    Returns:
+        list[PromptItem]: the list of prompt items
+    Raises:
+        ParsingFileError: if the file is not found or contains invalid JSON
+    """
     prompt_list: list[PromptItem] = []
     try:
         with open(path, 'r', encoding='utf-8') as prompt_file:
@@ -61,14 +73,3 @@ def load_prompts(path: str) -> list[PromptItem]:
                   "and will be ignored",
                   file=sys.stderr)
     return prompt_list
-
-
-def check_file_loaders():
-    print("Function definition:")
-    print(load_fn_definitions("input/functions_definition.json"))
-    print("Prompts")
-    print(load_prompts("input/function_calling_tests.json"))
-
-
-if __name__ == "__main__":
-    check_file_loaders()
