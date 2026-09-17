@@ -19,112 +19,217 @@ def decode_fn_name(
     input_ids = encoded[0].tolist()
     candidate: str = ""
     fn_name: str = ""
+    param_value: str = ""
     status = aux.check_candidate_logits(candidate, allowed)
-    # invalid tokens to logit -inf
+
     while status != aux.CandidateStatus.VALID_COMPLETE:
         logits = model.get_logits_from_input_ids(input_ids)
+
+        # invalid tokens to logit -inf
         for token_id in range(len(logits)):
             token_text = vocab.get(token_id)
             if token_text is None:
                 logits[token_id] = float("-inf")
                 continue
+            if param_value != "":
+                if param_value[-1] == 'Ġ' and token_text[0] == 'Ġ':
+                    logits[token_id] = float("-inf")
             candidate = fn_name + token_text
             status = aux.check_candidate_logits(candidate, allowed)
             if status == aux.CandidateStatus.INVALID:
                 logits[token_id] = float("-inf")
-
+        # Check error
         if max(logits) == float("-inf"):
             raise DecodingError("No matches found for function name")
+
+        # Add new token to answer
         next_token_id = logits.index(max(logits))
         input_ids.append(next_token_id)
         decoded_next_token = vocab[next_token_id]
-        # context += decoded_next_token
         fn_name += decoded_next_token
         status = aux.check_candidate_logits(fn_name, allowed)
 
     return fn_name
 
 
-def decode_parameter(
+def decode_param_number(
         model: Small_LLM_Model,
         vocab: dict[int, str],
         context: str,
-        prompt: str,
         type: str) -> str:
-    """decode each parameter needed to run function"""
+    """Decode param if type is a kind of number"""
+    context += ' "'
     encoded = model.encode(context)
     input_ids = encoded[0].tolist()
     candidate: str = ""
     param_value: str = ""
     status = True
+    while status and len(param_value) < 10:
+        logits = model.get_logits_from_input_ids(input_ids)
+
+        # invalid tokens to logit -inf
+        for token_id in range(len(logits)):
+            token_text = vocab.get(token_id)
+            if token_text is None:
+                logits[token_id] = float("-inf")
+                continue
+            # if type == aux.ParamType.INTEGER.name:
+            #     if not aux.is_valid_number(token_text):
+            #         logits[token_id] = float("-inf")
+            candidate = param_value + token_text
+            cleaned_candidate = candidate.rstrip('Ġ').rstrip('"')
+            if param_value != "":
+                if not aux.is_valid_number(cleaned_candidate):
+                    logits[token_id] = float("-inf")
+
+        # Check error
+        if max(logits) == float("-inf"):
+            raise DecodingError(
+                "No matches found for function parameter"
+                )
+
+        # Add next token to answer
+        print("param_value:", repr(param_value))
+        for token_id in sorted(
+            range(len(logits)),
+            key=lambda i: logits[i],
+            reverse=True
+        )[:5]:
+            print(repr(vocab.get(token_id)), logits[token_id])
+        next_token_id = logits.index(max(logits))
+        input_ids.append(next_token_id)
+        decoded_next_token = vocab[next_token_id]
+        candidate = param_value + decoded_next_token
+
+        # Check if result is still a valid number
+        status = aux.is_valid_number(candidate)
+        if status:
+            param_value += decoded_next_token
+            status = aux.is_valid_number(param_value)
+    return param_value
+
+
+def decode_param_string(
+        model: Small_LLM_Model,
+        vocab: dict[int, str],
+        context: str,
+        ) -> str:
+    """Decode param if type is string"""
+    context += '"'
+    encoded = model.encode(context)
+    input_ids = encoded[0].tolist()
+    param_value: str = ""
+    status = True
+    while status:
+        logits = model.get_logits_from_input_ids(input_ids)
+
+        # invalid tokens to logit -inf
+        for token_id in range(len(logits)):
+            token_text = vocab.get(token_id)
+            if token_text is None:
+                logits[token_id] = float("-inf")
+                continue
+            # Prevent double spaces
+            if param_value != "":
+                if param_value[-1] == 'Ġ' and token_text[0] == 'Ġ':
+                    logits[token_id] = float("-inf")
+
+        # Check error
+        if param_value == "":
+            if max(logits) == float("-inf"):
+                raise DecodingError(
+                    "No matches found for function parameter"
+                    )
+
+        next_token_id = logits.index(max(logits))
+        input_ids.append(next_token_id)
+        decoded_next_token = vocab[next_token_id]
+        if decoded_next_token == '\\\\':
+            decoded_next_token = '\\'
+        print(repr(decoded_next_token))
+
+        # Find if next token starts with stop char
+        for token_id in sorted(
+            range(len(logits)),
+            key=lambda i: logits[i],
+            reverse=True
+        )[:5]:
+            print(repr(vocab.get(token_id)), logits[token_id])
+        safe_part = aux.find_stop_char(decoded_next_token)
+        if safe_part is not None:
+            param_value += safe_part
+            status = False
+        else:
+            param_value += decoded_next_token
+            if param_value.endswith('Ċ'):
+                status = False
+                break
+    return param_value
+
+
+def decode_param_bool(
+        model: Small_LLM_Model,
+        vocab: dict[int, str],
+        context: str,
+        ) -> str:
+    """Decode parameter if is a boolean"""
+    context += (
+        "Based on the request, should 'strict' be true or false? Answer: "
+    )
+    encoded = model.encode(context)
+    input_ids = encoded[0].tolist()
+    candidate: str = ""
+    param_value: str = ""
+    status = True
+    while status:
+        logits = model.get_logits_from_input_ids(input_ids)
+        for token_id in range(len(logits)):
+            token_text = vocab.get(token_id)
+            if token_text is None:
+                logits[token_id] = float("-inf")
+                continue
+            candidate = param_value + token_text
+            if not ('true'.startswith(candidate) or
+                    'false'.startswith(candidate)):
+                logits[token_id] = float("-inf")
+
+        if max(logits) == float("-inf"):
+            raise DecodingError(
+                "No matches found for function parameter"
+                )
+        next_token_id = logits.index(max(logits))
+        input_ids.append(next_token_id)
+        decoded_next_token = vocab[next_token_id]
+        candidate = param_value + decoded_next_token
+        status = not (candidate == 'true' or candidate == 'false')
+        param_value += decoded_next_token
+    return param_value
+
+
+def decode_parameter(
+        model: Small_LLM_Model,
+        vocab: dict[int, str],
+        context: str,
+        type: str) -> str:
+    """decode each parameter needed to run function"""
     if (
         type == aux.ParamType.NUMBER.name or
         type == aux.ParamType.FLOAT.name or
         type == aux.ParamType.INTEGER.name
     ):
-        while status and len(param_value) < 10:
-            logits = model.get_logits_from_input_ids(input_ids)
-            for token_id in range(len(logits)):
-                token_text = vocab.get(token_id)
-                if token_text is None:
-                    logits[token_id] = float("-inf")
-                    continue
-                candidate = param_value + token_text
-                if not aux.is_valid_number(candidate):
-                    logits[token_id] = float("-inf")
-
-            if max(logits) == float("-inf"):
-                raise DecodingError(
-                    "No matches found for function parameter"
-                    )
-            next_token_id = logits.index(max(logits))
-            input_ids.append(next_token_id)
-            decoded_next_token = vocab[next_token_id]
-            # print(f"valid candidate {decoded_next_token}/ max logit: {logits[next_token_id]}")
-            candidate = param_value + decoded_next_token
-            status = aux.is_valid_number(candidate)
-            if status:
-                context += decoded_next_token
-                param_value += decoded_next_token
-                # print(f"(number) param_value so far: {param_value}")
-                status = aux.is_valid_number(param_value)
-            # print(f"end of loop status: {status}")
+        param_value = decode_param_number(
+            model, vocab, context, type
+        )
     if type == aux.ParamType.STRING.name:
-        status = True
-        while status:
-            print(f"(string) Param value so far: {param_value}")
-            logits = model.get_logits_from_input_ids(input_ids)
-            for token_id in range(len(logits)):
-                token_text = vocab.get(token_id)
-                if token_text is None:
-                    logits[token_id] = float("-inf")
-                    continue
-                # if token_text == "Ċ":
-                #     logits[token_id] = float("-inf")
-            if param_value == "":
-                if max(logits) == float("-inf"):
-                    raise DecodingError(
-                        "No matches found for function parameter"
-                        )
-            if param_value != "" and max(logits) == float("-inf"):
-                status = False
-                break
-            next_token_id = logits.index(max(logits))
-            input_ids.append(next_token_id)
-            decoded_next_token = vocab[next_token_id]
-            safe_part = aux.find_stop_char(decoded_next_token)
-            if safe_part is not None:
-                param_value += safe_part
-                status = False
-            else:
-                param_value += decoded_next_token
-                if param_value.count("'") >= 2 or param_value.count('"') >= 2:
-                    status = False
-                    break
-                context += decoded_next_token
+        param_value = decode_param_string(
+            model, vocab, context
+        )
+    if type == aux.ParamType.BOOL.name:
+        param_value = decode_param_bool(model, vocab, context)
 
     final_param_value: str = param_value.replace('Ġ', ' ')
-    return final_param_value.rstrip().rstrip('Ċ').rstrip("'")
+    print(f"\nValue found: {final_param_value}\n")
+    return final_param_value.rstrip().rstrip('Ċ')
 
 
 def decode_output(
@@ -135,6 +240,7 @@ def decode_output(
     """Start the decode process"""
     object_return: dict[str: Any] = {}
     fn_name: str = ""
+
     # Find function name
     allowed_fn_names: list[str] = []
     for function in functions:
@@ -147,7 +253,7 @@ def decode_output(
     fn_name = decode_fn_name(
         model, vocab, fn_initial_context, allowed_fn_names
         )
-    print(f"Function name: {fn_name}")
+
     # Find function parameters
     function: FunctionDefinition = next(
         function for function in functions
@@ -158,20 +264,24 @@ def decode_output(
     param_initial_context: str = (
         aux.build_context_for_parameter(prompt, function)
     )
+    param_value: str = ""
     for param in funct_param:
         type = aux.ParamType(funct_param[param].type).name
         param_initial_context += (
-            f"' {param}' (type: {type}) value: "
+            f'"{param}":' # UN ESPACIO AQUI LO CAMBIA TODO NO ENTIENDO si lo quito sale bien regex * y \\d pero mal Shrek
         )
-        param_value: str = decode_parameter(
-            model, vocab, param_initial_context, prompt, type
+        print(param_initial_context)
+        param_value = decode_parameter(
+            model, vocab, param_initial_context, type
         )
-        print(f"Value found for {param} = {param_value}")
         if (
             type == aux.ParamType.FLOAT.name or
             type == aux.ParamType.NUMBER.name or
             type == aux.ParamType.INTEGER.name
         ):
+            if '.' in param_value:
+                number_str: str = aux.clean_number(param_value)
+                param_value = number_str
             if type == aux.ParamType.INTEGER.name:
                 number = int(float(param_value))
                 result_parameters[param] = number
@@ -179,13 +289,17 @@ def decode_output(
                 type == aux.ParamType.FLOAT.name or
                 type == aux.ParamType.NUMBER.name
             ):
-                if '.' in param_value or ',' in param_value:
-                    number_str = aux.clean_number(param_value)
-                    result_parameters[param] = float(number_str)
+                result_parameters[param] = float(param_value)
         else:
+            print(f"parametro antes de limpiarse: {param_value}")
             cleaned_param_value: str = aux.clean_param_value(param_value)
-            result_parameters[param] = cleaned_param_value
-        param_initial_context += param_value + ','
+            final_param = aux.preserve_literal_string_value(
+                cleaned_param_value, prompt
+                )
+            print(f"parametro antes de entrar al diccionario: {final_param}")
+            result_parameters[param] = final_param
+        # Add param found to context for next param
+        param_initial_context += param_value + ', '
     # Save final dict result
     object_return = {
         'prompt': prompt,

@@ -50,16 +50,16 @@
     "prompt": "Run the query 'INSERT INTO logs VALUES (1, 2, 3)' on the system database",
     "name": "fn_execute_sql_query",
     "parameters": {
-      "query": "1, 2, 3\u010aAnswer:\u010a\u010aThe parameters needed in fn_execute_sql_query are: 'query",
-      "database": "1, 2, 3\u010aAnswer:\u010aThe parameters needed in fn_execute_sql_query are: 'query,"
+      "query": "INSERT INTO logs VALUES (1, 2, 3)",
+      "database": "system"
     }
   },
   {
     "prompt": "Read the file at /home/user/data.json with utf-8 encoding",
     "name": "fn_read_file",
     "parameters": {
-      "path": "/home/user/data.json\u010a' encoding",
-      "encoding": "utf-8.Encoding' (type: STRING) value:  utf-8.Encoding"
+      "path": "/home/user/data.json",
+      "encoding": "utf-8"
     }
   },
   {
@@ -74,14 +74,14 @@
     "prompt": "Format template: Hello {user}'s profile!",
     "name": "fn_format_template",
     "parameters": {
-      "template": "Hello {user}"
+      "template": "Hello {user}'s profile!"
     }
   },
   {
     "prompt": "Format template: Say \"hello\" to {name}",
     "name": "fn_format_template",
     "parameters": {
-      "template": "hello world"
+      "template": "hello"
     }
   }
 ]

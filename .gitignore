@@ -5,3 +5,4 @@ pyproject.toml
 uv.lock
 __pycache__/
 .DS_Store
+prueba.py

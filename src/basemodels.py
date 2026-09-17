@@ -1,5 +1,4 @@
-from pydantic import (
-    BaseModel, Field, field_validator, ConfigDict, ValidationError)
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Any
 
 
@@ -11,16 +10,40 @@ class ParameterSpec(BaseModel):
 
 class FunctionDefinition(BaseModel):
     """Check and validate the functions available"""
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra='ignore')
     name: str = Field(..., min_length=4)
     description: str = Field(...)
     parameters: dict[str, ParameterSpec] = Field(...)
     returns: ParameterSpec
 
+    @model_validator(mode="before")
+    @classmethod
+    def check_extra_fields(cls, data):
+        valid_fields = cls.model_fields.keys()
+
+        extra_fields = set(data) - set(valid_fields)
+
+        for field in extra_fields:
+            print(f"The field: {field} has been ignored")
+
+        return data
+
 
 class PromptItem(BaseModel):
     model_config = ConfigDict(extra='forbid')
     prompt: str = Field(..., min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_extra_fields(cls, data):
+        valid_fields = cls.model_fields.keys()
+
+        extra_fields = set(data) - set(valid_fields)
+
+        for field in extra_fields:
+            print(f"The field: {field} has been ignored")
+
+        return data
 
 
 class FunctionCallResult(BaseModel):

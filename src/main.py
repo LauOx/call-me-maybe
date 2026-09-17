@@ -1,4 +1,3 @@
-import os
 import sys
 import argparse
 from file_loader import ParsingFileError, load_fn_definitions, load_prompts
@@ -11,34 +10,51 @@ import json
 from llm_sdk import Small_LLM_Model
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse arguments and get type of visualization"""
+def parse_arguments() -> argparse.Namespace:
+    """
+    Parse command-line arguments.
+
+    Returns:
+        Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser(
-        description="Function calling"
-        )
+        description="Generate function calls from natural-language prompts."
+    )
+
+    parser.add_argument(
+        "--functions_definition",
+        default="data/input/functions_definition.json",
+        help="Path to the JSON file containing function definitions."
+    )
+
     parser.add_argument(
         "--input",
-        type=str,
-        default="data/input/",
-        help="file.json file with prompts"
-        )
+        default="data/input/function_calling_tests.json",
+        help="Path to the JSON file containing input prompts."
+    )
+
     parser.add_argument(
         "--output",
-        type=str,
-        default="data/output",
-        help="file.json file where the output is going to be written"
-        )
+        default="data/output/function_calling_results.json",
+        help="Path to the JSON file where results will be written."
+    )
+
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=500,
+        help="Limits the number of tokens to this number"
+    )
+
     return parser.parse_args()
 
 
 def call_me_maybe() -> None:
     """Run function calling program and raises erros"""
-    args: argparse.Namespace = parse_args()
-    fn_def_path: str = os.path.join(args.input, 'functions_definition.json')
-    prompts_path: str = os.path.join(args.input, 'function_calling_tests.json')
-    output_path: str = os.path.join(
-        args.output, 'function_calling_results.json'
-        )
+    args = parse_arguments()
+    fn_def_path: str = args.functions_definition
+    prompts_path: str = args.input
+    output_path: str = args.output
     try:
         functions: list[FunctionDefinition] = load_fn_definitions(fn_def_path)
         prompts: list[PromptItem] = load_prompts(prompts_path)
@@ -68,10 +84,12 @@ def call_me_maybe() -> None:
     except ValidationError as e:
         raise ValidationError(f"Error validating an object {e}")
     except ParsingFileError as e:
-        raise ParsingFileError(f"An error ocurred while parsing json files: {e}",
+        raise ParsingFileError(
+            f"An error ocurred while parsing json files: {e}",
               file=sys.stderr)
     except WritingOutputError as e:
-        raise WritingOutputError(f"An error ocurred while writing the output file: {e}",
+        raise WritingOutputError(
+            f"An error ocurred while writing the output file: {e}",
               file=sys.stderr)
     except KeyboardInterrupt:
         raise KeyboardInterrupt("User interrupted the program")

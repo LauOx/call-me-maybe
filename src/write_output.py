@@ -1,6 +1,3 @@
-import sys
-from basemodels import FunctionCallResult
-from pydantic import ValidationError
 import json
 from typing import Any
 
@@ -16,8 +13,6 @@ def write_output(output_dicts: dict[str, Any], path: str) -> None:
         with open(path, 'w', encoding='utf-8') as output_file:
             output_json = json.dumps(output_dicts, indent=2)
             output_file.write(output_json)
-    except ValidationError:
-        raise WritingOutputError("error de ejemplo")
     except (FileNotFoundError, IsADirectoryError):
         raise WritingOutputError(
             f"'{path}' does not point to a valid folder"
